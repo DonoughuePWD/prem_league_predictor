@@ -26,6 +26,17 @@ def prepare_matrix(frame: pd.DataFrame, feature_columns: list[str], medians: pd.
     return np.column_stack([np.ones(len(standardized)), standardized.to_numpy(dtype=float)])
 
 
+def fit_softmax(x: np.ndarray, y: np.ndarray, epochs: int, learning_rate: float, l2: float) -> np.ndarray:
+    """Fit multiclass softmax regression with batch gradient descent."""
+    weights = np.zeros((x.shape[1], len(TARGETS)))
+    for _ in range(epochs):
+        probabilities = softmax(x @ weights)
+        gradient = x.T @ (probabilities - y) / len(x)
+        gradient[1:] += l2 * weights[1:]
+        weights -= learning_rate * gradient
+    return weights
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--input", type=Path, default=Path("data/processed/matches_with_features.csv"))
@@ -34,6 +45,11 @@ def main() -> None:
     parser.add_argument("--epochs", type=int, default=2500)
     parser.add_argument("--learning-rate", type=float, default=0.05)
     parser.add_argument("--l2", type=float, default=0.001)
+    parser.add_argument(
+        "--refit-all",
+        action="store_true",
+        help="Evaluate on the test season, then refit the saved model on every season",
+    )
     args = parser.parse_args()
 
     frame = pd.read_csv(args.input)
@@ -56,17 +72,23 @@ def main() -> None:
     y_train = np.eye(len(TARGETS))[[target_index[value] for value in train["result"]]]
     y_test_index = np.array([target_index[value] for value in test["result"]])
 
-    weights = np.zeros((x_train.shape[1], len(TARGETS)))
-    for _ in range(args.epochs):
-        probabilities = softmax(x_train @ weights)
-        gradient = x_train.T @ (probabilities - y_train) / len(x_train)
-        gradient[1:] += args.l2 * weights[1:]
-        weights -= args.learning_rate * gradient
+    weights = fit_softmax(x_train, y_train, args.epochs, args.learning_rate, args.l2)
 
     test_probabilities = softmax(x_test @ weights)
     predictions = test_probabilities.argmax(axis=1)
     accuracy = float((predictions == y_test_index).mean())
     log_loss = float(-np.log(test_probabilities[np.arange(len(test)), y_test_index].clip(1e-12)).mean())
+
+    saved_rows = len(train)
+    if args.refit_all:
+        all_numeric = frame[feature_columns].apply(pd.to_numeric, errors="coerce")
+        medians = all_numeric.median().fillna(0.0)
+        means = all_numeric.fillna(medians).mean()
+        scales = all_numeric.fillna(medians).std().replace(0, 1).fillna(1)
+        x_all = prepare_matrix(frame, feature_columns, medians, means, scales)
+        y_all = np.eye(len(TARGETS))[[target_index[value] for value in frame["result"]]]
+        weights = fit_softmax(x_all, y_all, args.epochs, args.learning_rate, args.l2)
+        saved_rows = len(frame)
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
     np.savez(
@@ -84,6 +106,8 @@ def main() -> None:
         "test_season": test_season,
         "accuracy": accuracy,
         "log_loss": log_loss,
+        "saved_model_rows": saved_rows,
+        "refit_all": args.refit_all,
         "features": feature_columns,
     }
     args.output.with_suffix(".json").write_text(json.dumps(metrics, indent=2), encoding="utf-8")

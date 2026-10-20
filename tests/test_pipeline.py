@@ -3,11 +3,13 @@ from __future__ import annotations
 import unittest
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 
-from src.build_features import build_features
+from src.build_features import TeamState, build_features
 from src.build_league_table import build_league_table
 from src.prepare_matches import load_current_file, normalize_team, prepare_matches
+from src.simulate_season import remaining_fixtures, sample_score
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -92,6 +94,26 @@ class LeagueTableTests(unittest.TestCase):
 
         self.assertEqual(set(table["season"]), {"2024-25"})
         self.assertEqual(table.iloc[0]["team"], "Alpha")
+
+
+class SimulationTests(unittest.TestCase):
+    def test_remaining_fixtures_complete_double_round_robin(self) -> None:
+        teams = {"Alpha", "Beta", "Gamma"}
+        played = {("Alpha", "Beta"), ("Gamma", "Alpha")}
+
+        remaining = remaining_fixtures(teams, played)
+
+        self.assertEqual(len(remaining), 4)
+        self.assertNotIn(("Alpha", "Beta"), remaining)
+        self.assertIn(("Beta", "Alpha"), remaining)
+
+    def test_sampled_score_agrees_with_requested_result(self) -> None:
+        rng = np.random.default_rng(7)
+        state = TeamState()
+
+        home_goals, away_goals = sample_score("A", state, state, rng)
+
+        self.assertLess(home_goals, away_goals)
 
 
 if __name__ == "__main__":
