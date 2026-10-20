@@ -10,6 +10,12 @@ from pathlib import Path
 import pandas as pd
 
 
+ELO_INITIAL_RATING = 1500.0
+ELO_HOME_ADVANTAGE = 65.0
+ELO_K_FACTOR = 20.0
+ELO_SEASON_CARRYOVER = 2 / 3
+
+
 @dataclass
 class TeamState:
     games: int = 0
@@ -41,6 +47,28 @@ def form_points(state: TeamState, window: int) -> float:
 def recent_average(values: deque[int], window: int) -> float:
     selected = list(values)[-window:]
     return safe_rate(sum(selected), len(selected))
+
+
+def regress_elo(rating: float) -> float:
+    """Move a rating toward average between seasons."""
+    return ELO_INITIAL_RATING + (rating - ELO_INITIAL_RATING) * ELO_SEASON_CARRYOVER
+
+
+def expected_home_score(home_rating: float, away_rating: float) -> float:
+    """Return the Elo expected score for the home team."""
+    return 1 / (1 + 10 ** ((away_rating - (home_rating + ELO_HOME_ADVANTAGE)) / 400))
+
+
+def elo_margin_multiplier(goal_margin: int) -> float:
+    """Give decisive results modestly more influence on Elo."""
+    return 1.0 if goal_margin <= 1 else 1.5 if goal_margin == 2 else 1.75
+
+
+def elo_rating_change(home_rating: float, away_rating: float, home_score: float, goal_margin: int) -> float:
+    """Return the zero-sum rating change from the home team's perspective."""
+    return ELO_K_FACTOR * elo_margin_multiplier(goal_margin) * (
+        home_score - expected_home_score(home_rating, away_rating)
+    )
 
 
 def league_positions(states: dict[str, TeamState], teams: set[str]) -> dict[str, int]:
@@ -119,14 +147,14 @@ def build_features(matches: pd.DataFrame) -> pd.DataFrame:
     matches = matches.sort_values(["date", "home_team", "away_team"]).reset_index(drop=True)
 
     rows: list[dict] = []
-    ratings: defaultdict[str, float] = defaultdict(lambda: 1500.0)
+    ratings: defaultdict[str, float] = defaultdict(lambda: ELO_INITIAL_RATING)
     previous_season: str | None = None
 
     for season, season_matches in matches.groupby("season", sort=False):
         teams = set(season_matches["home_team"]) | set(season_matches["away_team"])
         if previous_season is not None:
             for team in list(ratings):
-                ratings[team] = 1500.0 + (ratings[team] - 1500.0) * (2 / 3)
+                ratings[team] = regress_elo(ratings[team])
         previous_season = season
         states: defaultdict[str, TeamState] = defaultdict(TeamState)
 
@@ -148,10 +176,10 @@ def build_features(matches: pd.DataFrame) -> pd.DataFrame:
             else:
                 home_points, away_points, home_score = 1, 1, 0.5
 
-            expected_home = 1 / (1 + 10 ** ((ratings[match.away_team] - (ratings[match.home_team] + 65)) / 400))
             goal_margin = abs(int(match.home_goals) - int(match.away_goals))
-            multiplier = 1.0 if goal_margin <= 1 else 1.5 if goal_margin == 2 else 1.75
-            change = 20 * multiplier * (home_score - expected_home)
+            change = elo_rating_change(
+                ratings[match.home_team], ratings[match.away_team], home_score, goal_margin
+            )
             ratings[match.home_team] += change
             ratings[match.away_team] -= change
 
