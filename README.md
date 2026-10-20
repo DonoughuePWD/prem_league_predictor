@@ -39,3 +39,55 @@ completed 2026-27 results, predicts and simulates every remaining home/away
 fixture, and writes `data/processed/2026-27-projection.csv`. The default 1,000
 runs report expected position, points and final Elo plus title, top-four and
 relegation probabilities. Use `--simulations 10000` for a more stable run.
+
+## Dashboard
+
+The simulation also writes `data/processed/forecast.json`, the versioned data
+contract used by the Streamlit dashboard. Run the dashboard locally with:
+
+```powershell
+pip install -r requirements.txt
+streamlit run app.py
+```
+
+Locally, the app reads `data/processed/forecast.json`. In Azure, it reads the
+private `forecasts/latest.json` blob using the App Service managed identity.
+
+## Azure deployment
+
+Azure provides the public App Service dashboard, private Blob Storage for the
+latest and historical forecasts, managed identity/RBAC, and Application
+Insights monitoring. GitHub Actions performs weekly data refresh, validation,
+training, 1,000 season simulations, blob publication, and dashboard deployment.
+
+Prerequisites:
+
+- An Azure subscription and Azure CLI
+- Permission to create resource groups, Entra applications, role assignments,
+  App Service, Storage, Log Analytics, and Application Insights resources
+- The repository name in `owner/repository` form
+
+After `az login`, provision the resources and GitHub OIDC identity once:
+
+```powershell
+.\scripts\setup_azure.ps1 `
+  -SubscriptionId "your-subscription-id" `
+  -GitHubRepository "DonoughuePWD/prem_league_predictor"
+```
+
+The script prints the three GitHub Action secrets and two repository variables
+to add under **Settings → Secrets and variables → Actions**. Also add
+`FOOTBALL_DATA_API_KEY` as a repository secret. No Azure password, storage key,
+or publish profile is stored in GitHub.
+
+The default App Service SKU is `F1` for a low-cost demonstration deployment.
+Use `-AppServiceSku B1` for an always-on dashboard with fewer platform limits.
+
+Workflows:
+
+- `deploy-dashboard.yml` tests and deploys dashboard changes to App Service.
+- `weekly-forecast.yml` runs at 03:17 UTC each Monday and can also be started
+  manually from the GitHub Actions page.
+
+The Bicep deployment outputs the public dashboard URL in the form
+`https://<app-name>.azurewebsites.net`.

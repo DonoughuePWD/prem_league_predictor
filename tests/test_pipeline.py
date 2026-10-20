@@ -9,7 +9,7 @@ import pandas as pd
 from src.build_features import TeamState, build_features
 from src.build_league_table import build_league_table
 from src.prepare_matches import load_current_file, normalize_team, prepare_matches
-from src.simulate_season import remaining_fixtures, sample_score
+from src.simulate_season import load_current_results, remaining_fixtures, sample_score
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -97,6 +97,15 @@ class LeagueTableTests(unittest.TestCase):
 
 
 class SimulationTests(unittest.TestCase):
+    def test_both_current_result_formats_are_supported(self) -> None:
+        co_uk = load_current_results(REPO_ROOT / "data" / "current" / "2026-27.csv")
+        api = load_current_results(REPO_ROOT / "data" / "matches.csv")
+
+        self.assertEqual(set(co_uk["season"]), {"2026-27"})
+        self.assertEqual(set(api["season"]), {"2025-26"})
+        self.assertTrue(co_uk["result"].isin(["H", "D", "A"]).all())
+        self.assertTrue(api["result"].isin(["H", "D", "A"]).all())
+
     def test_remaining_fixtures_complete_double_round_robin(self) -> None:
         teams = {"Alpha", "Beta", "Gamma"}
         played = {("Alpha", "Beta"), ("Gamma", "Alpha")}

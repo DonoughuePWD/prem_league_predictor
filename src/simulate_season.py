@@ -5,6 +5,8 @@ from __future__ import annotations
 import argparse
 from collections import defaultdict
 from copy import deepcopy
+from datetime import datetime, timezone
+import json
 from pathlib import Path
 
 import numpy as np
@@ -20,7 +22,7 @@ if __package__:
         snapshot,
         update_state,
     )
-    from .prepare_matches import load_historical_file
+    from .prepare_matches import load_current_file, load_historical_file
     from .train_model import softmax
 else:
     from build_features import (  # type: ignore[no-redef]
@@ -32,7 +34,7 @@ else:
         snapshot,
         update_state,
     )
-    from prepare_matches import load_historical_file  # type: ignore[no-redef]
+    from prepare_matches import load_current_file, load_historical_file  # type: ignore[no-redef]
     from train_model import softmax  # type: ignore[no-redef]
 
 
@@ -56,6 +58,14 @@ def load_model(path: Path) -> dict[str, object]:
         "feature_columns": artifact["feature_columns"].astype(str).tolist(),
         "targets": artifact["targets"].astype(str).tolist(),
     }
+
+
+def load_current_results(path: Path) -> pd.DataFrame:
+    """Load either a football-data.org API snapshot or football-data.co.uk CSV."""
+    columns = pd.read_csv(path, nrows=0).columns
+    if "utcDate" in columns:
+        return load_current_file(path)
+    return load_historical_file(path)
 
 
 def prepare_feature_vector(row: dict[str, object], model: dict[str, object]) -> np.ndarray:
@@ -226,22 +236,42 @@ def main() -> None:
     parser.add_argument("--current-results", type=Path, default=Path("data/current/2026-27.csv"))
     parser.add_argument("--model", type=Path, default=Path("models/softmax_baseline.npz"))
     parser.add_argument("--output", type=Path, default=Path("data/processed/2026-27-projection.csv"))
+    parser.add_argument("--json-output", type=Path, default=Path("data/processed/forecast.json"))
     parser.add_argument("--season", default="2026-27")
     parser.add_argument("--simulations", type=int, default=1000)
     parser.add_argument("--seed", type=int, default=202627)
     args = parser.parse_args()
 
     historical = pd.read_csv(args.historical)
-    current = load_historical_file(args.current_results)
+    current = load_current_results(args.current_results)
     matches = pd.concat([historical, current], ignore_index=True)
     projection = simulate(matches, args.season, load_model(args.model), args.simulations, args.seed)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     projection.to_csv(args.output, index=False, float_format="%.4f")
+    metrics_path = args.model.with_suffix(".json")
+    model_metrics = json.loads(metrics_path.read_text(encoding="utf-8")) if metrics_path.exists() else {}
+    forecast = {
+        "schema_version": 1,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "season": args.season,
+        "data_cutoff": pd.to_datetime(current["date"]).max().date().isoformat(),
+        "completed_matches": int(len(current)),
+        "remaining_matches": int(380 - len(current)),
+        "simulations": args.simulations,
+        "seed": args.seed,
+        "model": {
+            key: model_metrics.get(key)
+            for key in ["test_season", "accuracy", "log_loss", "saved_model_rows", "refit_all"]
+        },
+        "teams": json.loads(projection.to_json(orient="records")),
+    }
+    args.json_output.parent.mkdir(parents=True, exist_ok=True)
+    args.json_output.write_text(json.dumps(forecast, indent=2), encoding="utf-8")
     display = projection.copy()
     for column in ["title_probability", "top_4_probability", "relegation_probability"]:
         display[column] = display[column].map(lambda value: f"{value:.1%}")
     print(display.to_string(index=False, float_format=lambda value: f"{value:.2f}"))
-    print(f"\nSaved {len(projection)} projected teams to {args.output}")
+    print(f"\nSaved {len(projection)} projected teams to {args.output} and {args.json_output}")
 
 
 if __name__ == "__main__":

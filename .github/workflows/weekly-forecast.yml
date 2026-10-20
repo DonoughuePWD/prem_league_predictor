@@ -1,0 +1,59 @@
+name: Weekly forecast
+
+on:
+  schedule:
+    - cron: "17 3 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  forecast:
+    if: ${{ vars.AZURE_STORAGE_ACCOUNT != '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - run: python -m unittest discover -s tests -v
+      - name: Fetch current Premier League fixtures
+        env:
+          FOOTBALL_DATA_API_KEY: ${{ secrets.FOOTBALL_DATA_API_KEY }}
+        run: python src/fetch_current.py
+      - run: python src/prepare_matches.py
+      - run: python src/build_features.py
+      - run: python src/train_model.py --refit-all
+      - name: Simulate the season
+        run: >-
+          python src/simulate_season.py
+          --current-results data/current/matches.csv
+          --simulations 1000
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - name: Publish forecast to private Blob Storage
+        run: >-
+          az storage blob upload
+          --account-name "${{ vars.AZURE_STORAGE_ACCOUNT }}"
+          --container-name forecasts
+          --name latest.json
+          --file data/processed/forecast.json
+          --auth-mode login
+          --overwrite
+      - name: Archive dated forecast
+        run: >-
+          az storage blob upload
+          --account-name "${{ vars.AZURE_STORAGE_ACCOUNT }}"
+          --container-name forecasts
+          --name "history/forecast-${{ github.run_id }}.json"
+          --file data/processed/forecast.json
+          --auth-mode login
+          --overwrite
