@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 import json
 from pathlib import Path
 
+import joblib
 import numpy as np
 import pandas as pd
 
@@ -23,7 +24,6 @@ if __package__:
         update_state,
     )
     from .prepare_matches import load_current_file, load_historical_file
-    from .train_model import softmax
 else:
     from build_features import (  # type: ignore[no-redef]
         ELO_INITIAL_RATING,
@@ -35,7 +35,6 @@ else:
         update_state,
     )
     from prepare_matches import load_current_file, load_historical_file  # type: ignore[no-redef]
-    from train_model import softmax  # type: ignore[no-redef]
 
 
 def remaining_fixtures(teams: set[str], played: set[tuple[str, str]]) -> list[tuple[str, str]]:
@@ -49,15 +48,20 @@ def remaining_fixtures(teams: set[str], played: set[tuple[str, str]]) -> list[tu
 
 
 def load_model(path: Path) -> dict[str, object]:
-    artifact = np.load(path, allow_pickle=False)
-    return {
-        "weights": artifact["weights"],
-        "medians": artifact["medians"],
-        "means": artifact["means"],
-        "scales": artifact["scales"],
-        "feature_columns": artifact["feature_columns"].astype(str).tolist(),
-        "targets": artifact["targets"].astype(str).tolist(),
-    }
+    """Load the fitted scikit-learn pipeline and its feature contract."""
+    artifact = joblib.load(path)
+    required = {"pipeline", "feature_columns", "targets"}
+    if not isinstance(artifact, dict) or not required.issubset(artifact):
+        raise ValueError(f"Model artifact {path} does not contain {sorted(required)}")
+    # Extract the fitted preprocessing parameters once. Calling the complete
+    # pipeline hundreds of thousands of times would repeat sklearn validation
+    # overhead for every simulated fixture.
+    pipeline = artifact["pipeline"]
+    artifact["imputer_statistics"] = pipeline.named_steps["imputer"].statistics_
+    artifact["scaler_mean"] = pipeline.named_steps["scaler"].mean_
+    artifact["scaler_scale"] = pipeline.named_steps["scaler"].scale_
+    artifact["classifier"] = pipeline.named_steps["classifier"]
+    return artifact
 
 
 def load_current_results(path: Path) -> pd.DataFrame:
@@ -68,13 +72,13 @@ def load_current_results(path: Path) -> pd.DataFrame:
     return load_historical_file(path)
 
 
-def prepare_feature_vector(row: dict[str, object], model: dict[str, object]) -> np.ndarray:
-    """Standardize one simulated fixture without constructing a DataFrame."""
-    values = np.array([float(row.get(column, np.nan)) for column in model["feature_columns"]])
+def predict_probabilities(row: dict[str, object], model: dict[str, object]) -> np.ndarray:
+    """Predict home/draw/away probabilities with the saved sklearn pipeline."""
+    values = np.asarray([row.get(column, np.nan) for column in model["feature_columns"]], dtype=float)
     missing = np.isnan(values)
-    values[missing] = model["medians"][missing]
-    standardized = (values - model["means"]) / model["scales"]
-    return np.concatenate(([1.0], standardized))
+    values[missing] = model["imputer_statistics"][missing]
+    standardized = (values - model["scaler_mean"]) / model["scaler_scale"]
+    return model["classifier"].predict_proba(standardized.reshape(1, -1))[0]
 
 
 def replay_matches(matches: pd.DataFrame, target_season: str) -> tuple[dict[str, TeamState], dict[str, float], set[str]]:
@@ -174,8 +178,7 @@ def simulate(
             row["away_rest_days"] = 7
             row["elo_difference"] = ratings[home_team] - ratings[away_team]
             row["season_progress"] = (states[home_team].games + states[away_team].games) / 76
-            vector = prepare_feature_vector(row, model)
-            probabilities = softmax((vector @ model["weights"])[None, :])[0]
+            probabilities = predict_probabilities(row, model)
             result = str(rng.choice(targets, p=probabilities))
             home_goals, away_goals = sample_score(result, states[home_team], states[away_team], rng)
             home_points, away_points, home_score = (
@@ -234,7 +237,7 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--historical", type=Path, default=Path("data/processed/matches.csv"))
     parser.add_argument("--current-results", type=Path, default=Path("data/current/2026-27.csv"))
-    parser.add_argument("--model", type=Path, default=Path("models/softmax_baseline.npz"))
+    parser.add_argument("--model", type=Path, default=Path("models/logistic_regression.joblib"))
     parser.add_argument("--output", type=Path, default=Path("data/processed/2026-27-projection.csv"))
     parser.add_argument("--json-output", type=Path, default=Path("data/processed/forecast.json"))
     parser.add_argument("--season", default="2026-27")
@@ -261,7 +264,7 @@ def main() -> None:
         "seed": args.seed,
         "model": {
             key: model_metrics.get(key)
-            for key in ["test_season", "accuracy", "log_loss", "saved_model_rows", "refit_all"]
+            for key in ["model_type", "test_season", "accuracy", "log_loss", "saved_model_rows", "refit_all"]
         },
         "teams": json.loads(projection.to_json(orient="records")),
     }

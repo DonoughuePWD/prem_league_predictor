@@ -10,6 +10,7 @@ from src.build_features import TeamState, build_features
 from src.build_league_table import build_league_table
 from src.prepare_matches import load_current_file, normalize_team, prepare_matches
 from src.simulate_season import load_current_results, remaining_fixtures, sample_score
+from src.train_model import build_pipeline
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -123,6 +124,29 @@ class SimulationTests(unittest.TestCase):
         home_goals, away_goals = sample_score("A", state, state, rng)
 
         self.assertLess(home_goals, away_goals)
+
+
+class ModelTests(unittest.TestCase):
+    def test_sklearn_pipeline_returns_three_probabilities(self) -> None:
+        features = np.array(
+            [
+                [2.0, 0.0],
+                [1.5, 0.2],
+                [0.1, 0.0],
+                [0.0, 0.1],
+                [-1.5, -0.2],
+                [-2.0, 0.0],
+            ]
+        )
+        results = np.array(["H", "H", "D", "D", "A", "A"])
+        pipeline = build_pipeline(max_iter=500, regularization=1.0)
+
+        pipeline.fit(features, results)
+        probabilities = pipeline.predict_proba([[0.5, np.nan]])[0]
+
+        self.assertEqual(probabilities.shape, (3,))
+        self.assertAlmostEqual(float(probabilities.sum()), 1.0)
+        self.assertEqual(set(pipeline.classes_), {"H", "D", "A"})
 
 
 if __name__ == "__main__":

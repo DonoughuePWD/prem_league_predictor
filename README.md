@@ -33,8 +33,10 @@ available season. It uses standard points, goal difference, and goals scored
 ordering, and adds points-per-game, five-match form, home/away points-per-game,
 current Elo, and Elo rank. Pass `--season 2024-25` to build an earlier season.
 
-`train_model.py --refit-all` retains the 2025-26 holdout metrics, then retrains
-the saved model on all completed historical seasons. `simulate_season.py` fixes
+`train_model.py` uses a scikit-learn pipeline containing median imputation,
+standardisation, and multinomial logistic regression. The `--refit-all` option
+retains the 2025-26 holdout metrics, then retrains the saved pipeline on all
+completed historical seasons. `simulate_season.py` fixes
 completed 2026-27 results, predicts and simulates every remaining home/away
 fixture, and writes `data/processed/2026-27-projection.csv`. The default 1,000
 runs report expected position, points and final Elo plus title, top-four and
@@ -89,7 +91,7 @@ Use `-AppServiceSku B1` for an always-on dashboard with fewer platform limits.
 Workflows:
 
 - `deploy-dashboard.yml` tests and deploys dashboard changes to App Service.
-- `weekly-forecast.yml` runs at 03:17 UTC each Monday, commits the refreshed
+- `weekly-forecast.yml` runs at 03:17 UTC each Tuesday, commits the refreshed
   public forecast to GitHub, and can also be started manually from Actions.
 
 The Bicep deployment outputs the public dashboard URL in the form

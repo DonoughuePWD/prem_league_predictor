@@ -98,8 +98,8 @@ st.markdown(
       </div>
       <div class="explain-card model">
         <div class="explain-label">How are matches predicted?</div>
-        <p>A softmax regression trained on historical matches weighs the available features, including Elo
-        and recent league form, to estimate three probabilities: home win, draw and away win.</p>
+        <p>A scikit-learn multinomial logistic regression trained on historical matches weighs the available
+        features, including Elo and recent league form, to estimate three probabilities: home win, draw and away win.</p>
       </div>
     </section>
     """,
