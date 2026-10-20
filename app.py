@@ -46,14 +46,23 @@ st.markdown(
     <style>
       .stApp { background: #07130f; color: #f4f7f5; }
       [data-testid="stHeader"] { background: rgba(7, 19, 15, 0.92); }
-      .hero { padding: 1.4rem 0 1rem; border-bottom: 1px solid #29443a; margin-bottom: 1rem; }
+      .hero { padding: 1.6rem 1.8rem 1.4rem; border: 1px solid #29443a; border-radius: 18px; margin: .5rem 0 1.25rem; background: linear-gradient(120deg, #102b21 0%, #0a1d2b 58%, #231b3d 100%); box-shadow: 0 16px 44px rgba(0, 0, 0, .18); }
       .eyebrow { color: #79e3aa; font-size: .78rem; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; }
       .hero h1 { color: #ffffff; font-size: clamp(2rem, 5vw, 4.2rem); line-height: .96; margin: .5rem 0; }
-      .hero p { color: #afc3ba; max-width: 760px; font-size: 1.05rem; }
-      [data-testid="stMetric"] { background: #10251d; border: 1px solid #29443a; border-radius: 12px; padding: 1rem; }
+      .hero p { color: #c5d9d0; max-width: 800px; font-size: 1.05rem; }
+      [data-testid="stMetric"] { background: linear-gradient(145deg, #102b21, #102136); border: 1px solid #31574a; border-top: 3px solid #79e3aa; border-radius: 14px; padding: 1rem; box-shadow: 0 8px 24px rgba(0, 0, 0, .12); }
       [data-testid="stMetricValue"] { color: #ffffff; }
       [data-testid="stMetricLabel"] { color: #9db7aa; }
+      h2, h3 { color: #f7d774 !important; }
+      .explain-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; margin: 1.25rem 0 1.5rem; }
+      .explain-card { background: #0d211a; border: 1px solid #29443a; border-radius: 14px; padding: 1rem 1.1rem; }
+      .explain-card.elo { border-left: 4px solid #64b5f6; }
+      .explain-card.model { border-left: 4px solid #b69cff; }
+      .explain-label { color: #ffffff; font-weight: 700; margin-bottom: .25rem; }
+      .explain-card p, .chart-note { color: #afc3ba; font-size: .9rem; line-height: 1.5; margin: 0; }
+      .chart-note { margin: -.35rem 0 .75rem; min-height: 2.7rem; }
       .note { color: #8fa99c; font-size: .85rem; }
+      @media (max-width: 700px) { .explain-grid { grid-template-columns: 1fr; } .hero { padding: 1.25rem; } }
     </style>
     """,
     unsafe_allow_html=True,
@@ -78,6 +87,24 @@ metric_columns[0].metric("Projected champion", leader["team"])
 metric_columns[1].metric("Title probability", percentage(leader["title_probability"]))
 metric_columns[2].metric("Matches included", f"{forecast['completed_matches']} / 380")
 metric_columns[3].metric("Highest relegation risk", most_likely_relegated["team"], percentage(most_likely_relegated["relegation_probability"]))
+
+st.markdown(
+    """
+    <section class="explain-grid">
+      <div class="explain-card elo">
+        <div class="explain-label">What is an Elo score?</div>
+        <p>A rolling strength rating: teams gain points for good results and lose them for poor ones,
+        with bigger changes when a result is unexpected. A higher Elo means the team is rated stronger.</p>
+      </div>
+      <div class="explain-card model">
+        <div class="explain-label">How are matches predicted?</div>
+        <p>A softmax regression trained on historical matches weighs the available features, including Elo
+        and recent league form, to estimate three probabilities: home win, draw and away win.</p>
+      </div>
+    </section>
+    """,
+    unsafe_allow_html=True,
+)
 
 st.subheader("Projected final table")
 display = table[
@@ -126,12 +153,20 @@ st.dataframe(
 left, right = st.columns(2)
 with left:
     st.subheader("Title race")
+    st.markdown(
+        '<p class="chart-note">The eight teams with the highest estimated chance of finishing the season as champions.</p>',
+        unsafe_allow_html=True,
+    )
     title = table.nlargest(8, "title_probability").set_index("team")[["title_probability"]]
-    st.bar_chart(title, color="#79e3aa", horizontal=True, height=360)
+    st.bar_chart(title, color="#54d6a0", horizontal=True, height=360)
 with right:
     st.subheader("Relegation risk")
+    st.markdown(
+        '<p class="chart-note">The eight teams with the highest estimated chance of finishing in the bottom three.</p>',
+        unsafe_allow_html=True,
+    )
     relegation = table.nlargest(8, "relegation_probability").set_index("team")[["relegation_probability"]]
-    st.bar_chart(relegation, color="#ff8b72", horizontal=True, height=360)
+    st.bar_chart(relegation, color="#ff766f", horizontal=True, height=360)
 
 model = forecast.get("model", {})
 st.caption(
