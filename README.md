@@ -1,7 +1,6 @@
 # Premier League predictor
 
-Data preparation and modelling pipeline for predicting the 2026-27 English
-Premier League.
+Who's going to win the Premier League this season? This is a data preparation and modelling pipeline for predicting the next EPL champion.
 
 ## Pipeline
 
@@ -19,7 +18,7 @@ python src/simulate_season.py
 python -m unittest discover -s tests -v
 ```
 
-Historical raw files are stored separately by season in `data/historical`.
+Historical raw files, from football-data.co.uk, are stored separately by season in `data/historical`.
 The normalized and feature-engineered datasets are generated in
 `data/processed`. Model artefacts are generated in `models`.
 
@@ -27,6 +26,10 @@ Features are calculated using information available before each fixture. The
 current baseline includes league points and position, goal difference,
 wins/draws/losses, points per game, three- and five-match form, recent scoring
 and conceding rates, home/away form, rest days, season progress, and Elo rating.
+
+Elo comes from chess. It keeps track of points and assigns a likelihood to each team before they play. 
+A win for the underdog gives more points than for the expected victor. Likewise, a draw slightly benefits 
+the underdog more. 
 
 `build_league_table.py` creates `data/processed/league_table.csv` for the latest
 available season. It uses standard points, goal difference, and goals scored
@@ -60,6 +63,7 @@ Locally and on Streamlit Community Cloud, the app reads
 
 ## Azure deployment
 
+There's an option for Azure deployment to scale up the predictions and historical data.
 Azure provides the public App Service dashboard, private Blob Storage for the
 latest and historical forecasts, managed identity/RBAC, and Application
 Insights monitoring. GitHub Actions performs weekly data refresh, validation,
