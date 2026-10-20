@@ -46,11 +46,13 @@ CANONICAL_COLUMNS = [
 ]
 
 
+# converts alternative club names into one consistent team name
 def normalize_team(name: str) -> str:
     cleaned = re.sub(r"\s+FC$", "", str(name).strip())
     return TEAM_ALIASES.get(str(name).strip(), TEAM_ALIASES.get(cleaned, cleaned))
 
 
+# converts one football-data csv into the canonical match schema
 def load_historical_file(path: Path) -> pd.DataFrame:
     season = path.stem
     frame = pd.read_csv(path)
@@ -74,6 +76,7 @@ def load_historical_file(path: Path) -> pd.DataFrame:
     return result[CANONICAL_COLUMNS]
 
 
+# combines every historical season csv in a directory
 def load_historical_directory(directory: Path) -> pd.DataFrame:
     files = sorted(directory.glob("*.csv"))
     if not files:
@@ -81,12 +84,14 @@ def load_historical_directory(directory: Path) -> pd.DataFrame:
     return pd.concat([load_historical_file(path) for path in files], ignore_index=True)
 
 
+# converts api season dates into the repository's season label format
 def season_label(start_date: str, end_date: str) -> str:
     start_year = int(str(start_date)[:4])
     end_year = int(str(end_date)[:4])
     return f"{start_year}-{end_year % 100:02d}"
 
 
+# converts finished api fixtures into the canonical match schema
 def load_current_file(path: Path) -> pd.DataFrame:
     frame = pd.read_csv(path)
     finished = frame.loc[frame["status"].eq("FINISHED")].copy()
@@ -118,6 +123,7 @@ def load_current_file(path: Path) -> pd.DataFrame:
     return result[CANONICAL_COLUMNS]
 
 
+# checks canonical matches for missing, invalid, or duplicate data
 def validate_matches(matches: pd.DataFrame) -> None:
     if matches[CANONICAL_COLUMNS].isna().any().any():
         raise ValueError("Canonical match data contains missing core values")
@@ -133,6 +139,7 @@ def validate_matches(matches: pd.DataFrame) -> None:
         raise ValueError("One or more results does not agree with the final score")
 
 
+# combines, sorts, and validates historical and optional current matches
 def prepare_matches(
     historical_dir: Path,
     current_file: Path | None = None,
@@ -149,6 +156,7 @@ def prepare_matches(
     return matches
 
 
+# runs the match-preparation command line workflow
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--historical-dir", type=Path, default=Path("data/historical"))

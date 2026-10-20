@@ -30,6 +30,7 @@ else:
     )
 
 
+# builds final or in-progress standings with form and elo values
 def build_league_table(matches: pd.DataFrame, season: str | None = None) -> pd.DataFrame:
     """Return final or in-progress standings for a season using completed matches."""
     required = {"season", "date", "home_team", "away_team", "home_goals", "away_goals", "result"}
@@ -124,6 +125,7 @@ def build_league_table(matches: pd.DataFrame, season: str | None = None) -> pd.D
     return table
 
 
+# runs the league-table command line workflow
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--input", type=Path, default=Path("data/processed/matches.csv"))

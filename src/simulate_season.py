@@ -37,6 +37,7 @@ else:
     from prepare_matches import load_current_file, load_historical_file  # type: ignore[no-redef]
 
 
+# lists every home-and-away fixture that has not yet been played
 def remaining_fixtures(teams: set[str], played: set[tuple[str, str]]) -> list[tuple[str, str]]:
     """Return every unplayed directed pairing in a double round-robin season."""
     return [
@@ -47,6 +48,7 @@ def remaining_fixtures(teams: set[str], played: set[tuple[str, str]]) -> list[tu
     ]
 
 
+# loads the saved sklearn pipeline and prepares fast inference values
 def load_model(path: Path) -> dict[str, object]:
     """Load the fitted scikit-learn pipeline and its feature contract."""
     artifact = joblib.load(path)
@@ -64,6 +66,7 @@ def load_model(path: Path) -> dict[str, object]:
     return artifact
 
 
+# reads current results from either supported data-source format
 def load_current_results(path: Path) -> pd.DataFrame:
     """Load either a football-data.org API snapshot or football-data.co.uk CSV."""
     columns = pd.read_csv(path, nrows=0).columns
@@ -72,6 +75,7 @@ def load_current_results(path: Path) -> pd.DataFrame:
     return load_historical_file(path)
 
 
+# predicts home, draw, and away probabilities for one fixture
 def predict_probabilities(row: dict[str, object], model: dict[str, object]) -> np.ndarray:
     """Predict home/draw/away probabilities with the saved sklearn pipeline."""
     values = np.asarray([row.get(column, np.nan) for column in model["feature_columns"]], dtype=float)
@@ -81,6 +85,7 @@ def predict_probabilities(row: dict[str, object], model: dict[str, object]) -> n
     return model["classifier"].predict_proba(standardized.reshape(1, -1))[0]
 
 
+# replays known results to reconstruct current team states and elo ratings
 def replay_matches(matches: pd.DataFrame, target_season: str) -> tuple[dict[str, TeamState], dict[str, float], set[str]]:
     """Replay history and return states and Elo immediately after known results."""
     frame = matches.copy()
@@ -120,6 +125,7 @@ def replay_matches(matches: pd.DataFrame, target_season: str) -> tuple[dict[str,
     return target_states, dict(ratings), target_teams
 
 
+# samples a plausible score that agrees with the predicted result
 def sample_score(
     result: str,
     home_state: TeamState,
@@ -138,6 +144,7 @@ def sample_score(
     return (1, 0) if result == "H" else (0, 1) if result == "A" else (1, 1)
 
 
+# simulates the remaining fixtures and aggregates final-table outcomes
 def simulate(
     matches: pd.DataFrame,
     season: str,
@@ -233,6 +240,7 @@ def simulate(
     return result.reset_index(drop=True)
 
 
+# runs the season-simulation command line workflow
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--historical", type=Path, default=Path("data/processed/matches.csv"))

@@ -20,6 +20,7 @@ TARGETS = ["H", "D", "A"]
 EXCLUDED = {"season", "date", "home_team", "away_team", "home_goals", "away_goals", "result", "source"}
 
 
+# creates the preprocessing and logistic regression pipeline
 def build_pipeline(max_iter: int, regularization: float) -> Pipeline:
     """Create the complete preprocessing and classification pipeline."""
     return Pipeline(
@@ -38,11 +39,13 @@ def build_pipeline(max_iter: int, regularization: float) -> Pipeline:
     )
 
 
+# converts selected dataframe columns into a numeric feature matrix
 def numeric_features(frame: pd.DataFrame, feature_columns: list[str]) -> np.ndarray:
     """Coerce model inputs to numbers and leave missing values for the imputer."""
     return frame[feature_columns].apply(pd.to_numeric, errors="coerce").to_numpy(dtype=float)
 
 
+# trains, evaluates, refits, and saves the model pipeline
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--input", type=Path, default=Path("data/processed/matches_with_features.csv"))

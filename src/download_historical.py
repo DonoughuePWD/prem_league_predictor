@@ -23,6 +23,7 @@ BASE_URL = "https://football-data.co.uk/mmz4281/{code}/E0.csv"
 CORE_COLUMNS = {"Div", "Date", "HomeTeam", "AwayTeam", "FTHG", "FTAG", "FTR"}
 
 
+# downloads and validates one completed premier league season
 def download_season(season: str, output_dir: Path, overwrite: bool = False) -> Path:
     """Download and validate one completed season."""
     if season not in SEASON_CODES:
@@ -52,6 +53,7 @@ def download_season(season: str, output_dir: Path, overwrite: bool = False) -> P
     return destination
 
 
+# runs the historical-data download command line workflow
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("seasons", nargs="*", default=list(SEASON_CODES))

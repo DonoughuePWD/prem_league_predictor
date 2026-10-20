@@ -16,6 +16,7 @@ ELO_K_FACTOR = 20.0
 ELO_SEASON_CARRYOVER = 2 / 3
 
 
+# stores a team's running league, form, venue, and date statistics
 @dataclass
 class TeamState:
     games: int = 0
@@ -35,35 +36,42 @@ class TeamState:
     last_date: pd.Timestamp | None = None
 
 
+# divides safely and returns zero when no observations exist
 def safe_rate(numerator: float, denominator: int) -> float:
     return numerator / denominator if denominator else 0.0
 
 
+# calculates normalized points form over a recent match window
 def form_points(state: TeamState, window: int) -> float:
     values = list(state.recent_points)[-window:]
     return safe_rate(sum(values), 3 * len(values))
 
 
+# calculates an average from the most recent values in a series
 def recent_average(values: deque[int], window: int) -> float:
     selected = list(values)[-window:]
     return safe_rate(sum(selected), len(selected))
 
 
+# moves an elo rating toward the league average between seasons
 def regress_elo(rating: float) -> float:
     """Move a rating toward average between seasons."""
     return ELO_INITIAL_RATING + (rating - ELO_INITIAL_RATING) * ELO_SEASON_CARRYOVER
 
 
+# estimates the home team's expected result from both elo ratings
 def expected_home_score(home_rating: float, away_rating: float) -> float:
     """Return the Elo expected score for the home team."""
     return 1 / (1 + 10 ** ((away_rating - (home_rating + ELO_HOME_ADVANTAGE)) / 400))
 
 
+# increases the elo effect of wins with larger goal margins
 def elo_margin_multiplier(goal_margin: int) -> float:
     """Give decisive results modestly more influence on Elo."""
     return 1.0 if goal_margin <= 1 else 1.5 if goal_margin == 2 else 1.75
 
 
+# calculates the zero-sum elo adjustment after a match
 def elo_rating_change(home_rating: float, away_rating: float, home_score: float, goal_margin: int) -> float:
     """Return the zero-sum rating change from the home team's perspective."""
     return ELO_K_FACTOR * elo_margin_multiplier(goal_margin) * (
@@ -71,6 +79,7 @@ def elo_rating_change(home_rating: float, away_rating: float, home_score: float,
     )
 
 
+# ranks teams using points, goal difference, and goals scored
 def league_positions(states: dict[str, TeamState], teams: set[str]) -> dict[str, int]:
     keys = {
         team: (states[team].points, states[team].goals_for - states[team].goals_against, states[team].goals_for)
@@ -89,6 +98,7 @@ def league_positions(states: dict[str, TeamState], teams: set[str]) -> dict[str,
     return positions
 
 
+# captures one team's pre-match features without using future information
 def snapshot(
     prefix: str,
     state: TeamState,
@@ -121,6 +131,7 @@ def snapshot(
     }
 
 
+# updates a team's running state after a completed match
 def update_state(state: TeamState, goals_for: int, goals_against: int, points: int, venue: str, date: pd.Timestamp) -> None:
     state.games += 1
     state.points += points
@@ -141,6 +152,7 @@ def update_state(state: TeamState, goals_for: int, goals_against: int, points: i
     state.last_date = date
 
 
+# builds leakage-safe pre-match features for every historical fixture
 def build_features(matches: pd.DataFrame) -> pd.DataFrame:
     matches = matches.copy()
     matches["date"] = pd.to_datetime(matches["date"])
@@ -189,6 +201,7 @@ def build_features(matches: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+# runs the feature-building command line workflow
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--input", type=Path, default=Path("data/processed/matches.csv"))

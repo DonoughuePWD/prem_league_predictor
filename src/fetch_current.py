@@ -15,6 +15,7 @@ import pandas as pd
 API_URL = "https://api.football-data.org/v4/competitions/PL/matches"
 
 
+# fetches the current premier league match payload from the api
 def fetch_matches(api_key: str) -> dict:
     request = urllib.request.Request(API_URL, headers={"X-Auth-Token": api_key})
     try:
@@ -24,6 +25,7 @@ def fetch_matches(api_key: str) -> dict:
         raise RuntimeError(f"football-data.org returned HTTP {error.code}") from error
 
 
+# runs the current-season data fetch command line workflow
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--output", type=Path, default=Path("data/current/matches.csv"))
