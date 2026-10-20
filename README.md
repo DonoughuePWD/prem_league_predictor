@@ -42,16 +42,19 @@ relegation probabilities. Use `--simulations 10000` for a more stable run.
 
 ## Dashboard
 
-The simulation also writes `data/processed/forecast.json`, the versioned data
-contract used by the Streamlit dashboard. Run the dashboard locally with:
+The simulation writes a versioned JSON data contract used by the Streamlit
+dashboard. The weekly workflow publishes it to
+`dashboard_data/forecast.json`; Azure deployments additionally copy it to
+private Blob Storage. Run the dashboard locally with:
 
 ```powershell
 pip install -r requirements.txt
 streamlit run app.py
 ```
 
-Locally, the app reads `data/processed/forecast.json`. In Azure, it reads the
-private `forecasts/latest.json` blob using the App Service managed identity.
+Locally and on Streamlit Community Cloud, the app reads
+`dashboard_data/forecast.json`. In Azure, it reads the private
+`forecasts/latest.json` blob using the App Service managed identity.
 
 ## Azure deployment
 
@@ -86,8 +89,8 @@ Use `-AppServiceSku B1` for an always-on dashboard with fewer platform limits.
 Workflows:
 
 - `deploy-dashboard.yml` tests and deploys dashboard changes to App Service.
-- `weekly-forecast.yml` runs at 03:17 UTC each Monday and can also be started
-  manually from the GitHub Actions page.
+- `weekly-forecast.yml` runs at 03:17 UTC each Monday, commits the refreshed
+  public forecast to GitHub, and can also be started manually from Actions.
 
 The Bicep deployment outputs the public dashboard URL in the form
 `https://<app-name>.azurewebsites.net`.

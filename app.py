@@ -27,7 +27,7 @@ def load_forecast() -> dict:
         payload = service.get_blob_client(container=container, blob=blob).download_blob().readall()
         return json.loads(payload)
 
-    path = Path(os.environ.get("FORECAST_PATH", "data/processed/forecast.json"))
+    path = Path(os.environ.get("FORECAST_PATH", "dashboard_data/forecast.json"))
     if not path.exists():
         st.error("No forecast is available yet. Run the training and simulation pipeline first.")
         st.stop()
