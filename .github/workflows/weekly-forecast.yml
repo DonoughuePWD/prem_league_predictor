@@ -2,7 +2,7 @@ name: Weekly forecast
 
 on:
   schedule:
-    - cron: "17 3 * * 1"
+    - cron: "17 3 * * 2"
   workflow_dispatch:
 
 permissions:
