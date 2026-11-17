@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-11-10T11:07:01.758299+00:00",
+  "generated_at": "2026-11-17T11:46:31.215907+00:00",
   "season": "2026-27",
   "data_cutoff": "2026-11-08",
   "completed_matches": 100,
@@ -11,7 +11,7 @@
     "model_type": "scikit-learn multinomial logistic regression",
     "test_season": "2025-26",
     "accuracy": 0.4842105263157895,
-    "log_loss": 1.0445233914959882,
+    "log_loss": 1.044523391504816,
     "saved_model_rows": 2660,
     "refit_all": true
   },
